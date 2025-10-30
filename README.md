@@ -85,6 +85,9 @@ This target will:
 - Launch `gdb client` and run it
 
 ### Compile a single file (utility target)
+For WSL some devpackages might be missing. If you get a linker error run the following:
+sudo apt update
+sudo apt install -y build-essential pkg-config uuid-dev libcurl4-openssl-dev libbsd-dev
 
 You can compile one source file with the same flags/defines as the client build:
 
