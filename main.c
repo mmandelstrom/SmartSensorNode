@@ -12,7 +12,7 @@ int main() {
   const char* port = "80";
   const char* path = "/post";
 
-  const char* json = "{\"message\":\"hej\",\"value\":123}";
+  const char* json = "{\"message\":\"testingtesting\",\"value\":123}";
   char httpRequest[512];
 
   if (snprintf(httpRequest, sizeof(httpRequest),
@@ -43,14 +43,25 @@ int main() {
   strcpy(client->writeBuffer, httpRequest);
   printf("Sending request\n%s\n\n", client->writeBuffer);
 
-  if (TCPClient_Write(client, requestLength) < 0) {
-    printf("TCPClient Write failed\n");
-    return -1;
+  int sent = 0;
+  while (sent < (int)requestLength) {
+      int s = TCPClient_Write(client, requestLength);
+      if (s < 0) {
+          printf("TCPClient Write failed\n");
+          return -1;
+      }
+      sent += s;
+      usleep(5000); /*Backoff for nonblocking*/
   }
 
-  if (TCPClient_Read(client) < 0) {
-    printf("TCPClient Read failed\n");
-    return -1;
+  int r = 0;
+  while (r == 0) {
+      r = TCPClient_Read(client);
+      if (r < 0) {
+          printf("TCPClient Read failed\n");
+          return -1;
+      }
+      usleep(5000);
   }
 
    TCPClient_DisposePtr(&client);

@@ -1,4 +1,16 @@
 #include "TCPClient.h"
+#include <fcntl.h>
+
+/*---------------------Internal functions------------------------------*/
+int TCPClient_set_nonblocking(int fd);
+/*---------------------------------------------------------------------*/
+
+int TCPClient_set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) return -1;
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) return -1;
+    return 0;
+}
 
 int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port, TCPClient_DataHandler _OnData, void* _Ctx) {
   _Client->fd = -1;
@@ -23,16 +35,27 @@ int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port,
   int fd = -1;
   struct addrinfo *addr_info;
 
+  /*Get linked list of available connections*/
   for (addr_info = result; addr_info; addr_info = addr_info->ai_next) {
     fd = socket(addr_info->ai_family, addr_info->ai_socktype, addr_info->ai_protocol);
     
     if (fd < 0) continue;
 
-    if (connect(fd, addr_info->ai_addr, addr_info->ai_addrlen) == 0) break;
+    if (TCPClient_set_nonblocking(fd) != 0) { 
+      close(fd); fd = -1; 
+      continue; 
+    }
 
+    int cres = connect(fd, addr_info->ai_addr, addr_info->ai_addrlen);
+    if (cres == 0) {
+      break;
+    }
+
+    if (cres < 0 && errno == EINPROGRESS) {
+      break;
+    }
     close(fd);
     fd = -1;
-
   }
 
   freeaddrinfo(result);
@@ -108,13 +131,19 @@ int TCPClient_Read(TCPClient* _Client) {
 
     if (bytesRead < 0) {
       if (errno == EINTR) continue;
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOTCONN) {
+        if (usedSpace == 0) {
+          return 0;
+        }
+
         _Client->readBuffer[usedSpace] = '\0';
         if (_Client->on_data) {
           _Client->on_data(_Client->readBuffer, usedSpace, _Client->on_data_ctx);
         }
+        
         return (int)usedSpace;
       }
+
       free(_Client->readBuffer);
       _Client->readBuffer = NULL;
       perror("recv");
@@ -125,7 +154,7 @@ int TCPClient_Read(TCPClient* _Client) {
     if (bytesRead == 0) {
       _Client->readBuffer[usedSpace] = '\0';
 
-      if (_Client->on_data) {
+      if (usedSpace > 0 && _Client->on_data) {
         _Client->on_data(_Client->readBuffer, usedSpace, _Client->on_data_ctx);
       }
 
@@ -156,7 +185,7 @@ int TCPClient_Write(TCPClient* _Client, size_t _Length) {
 
       if (bytesSent < 0) {
         if (errno == EINTR) continue;
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOTCONN) {
           return totalSent;
         }
 
@@ -190,6 +219,12 @@ void TCPClient_Dispose(TCPClient* _Client) {
   if (_Client->writeBuffer != NULL) {
     free(_Client->writeBuffer);
     _Client->writeBuffer = NULL;
+  }
+  if (_Client->on_data) {
+    _Client->on_data = NULL;
+  }
+  if (_Client->on_data_ctx) {
+    _Client->on_data_ctx = NULL;
   }
 }
 
