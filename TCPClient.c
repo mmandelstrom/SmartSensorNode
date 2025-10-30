@@ -1,8 +1,11 @@
 #include "TCPClient.h"
 
-
-int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port) {
+int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port, TCPClient_DataHandler _OnData, void* _Ctx) {
   _Client->fd = -1;
+  _Client->readBuffer = NULL;
+  _Client->writeBuffer = NULL;
+  _Client->on_data = _OnData;
+  _Client->on_data_ctx = _Ctx;
 
   struct addrinfo addresses = {0};
   struct addrinfo* result = NULL;
@@ -32,7 +35,7 @@ int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port)
 
   }
 
-  freeaddrinfo(addr_info);
+  freeaddrinfo(result);
   if (fd < 0)
     return -1;
 
@@ -41,7 +44,7 @@ int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port)
   return 0; 
 }
 
-int TCPClient_InitiatePtr(TCPClient** _ClientPtr, const char* _Host, const char* _Port) {
+int TCPClient_InitiatePtr(TCPClient** _ClientPtr, const char* _Host, const char* _Port, TCPClient_DataHandler _OnData, void* _Ctx) {
   if (!_ClientPtr) {
     return -1;
   }
@@ -50,7 +53,7 @@ int TCPClient_InitiatePtr(TCPClient** _ClientPtr, const char* _Host, const char*
     perror("malloc");
     return -2;
   }
-  int result = TCPClient_Initiate(client, _Host, _Port);
+  int result = TCPClient_Initiate(client, _Host, _Port, _OnData, _Ctx);
   if (result != 0) {
     free(client);
     return -3;
@@ -107,6 +110,9 @@ int TCPClient_Read(TCPClient* _Client) {
       if (errno == EINTR) continue;
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         _Client->readBuffer[usedSpace] = '\0';
+        if (_Client->on_data) {
+          _Client->on_data(_Client->readBuffer, usedSpace, _Client->on_data_ctx);
+        }
         return (int)usedSpace;
       }
       free(_Client->readBuffer);
@@ -118,7 +124,12 @@ int TCPClient_Read(TCPClient* _Client) {
 
     if (bytesRead == 0) {
       _Client->readBuffer[usedSpace] = '\0';
-      return 0;
+
+      if (_Client->on_data) {
+        _Client->on_data(_Client->readBuffer, usedSpace, _Client->on_data_ctx);
+      }
+
+      return (int)usedSpace;
     }
 
     if (bytesRead > 0) {
@@ -154,14 +165,14 @@ int TCPClient_Write(TCPClient* _Client, size_t _Length) {
       }
 
       if (bytesSent == 0) {
-        return totalSent;
+        return (int)totalSent;
       }
 
       totalSent += bytesSent;
       bytesLeft -= bytesSent;
       message += bytesSent;
   }
-    return 0;
+    return (int)totalSent;
 }
 
 void TCPClient_Dispose(TCPClient* _Client) {

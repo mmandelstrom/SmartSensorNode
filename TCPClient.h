@@ -14,15 +14,20 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+typedef void (*TCPClient_DataHandler)(const char* _Data, size_t _Length, void* _Ctx);
+
 typedef struct {
   int fd;
   char* readBuffer; /*Allocated in TCPClient_Read, free'd in dispose*/
   char* writeBuffer; /*Allocated in TCPClient_Read, free'd in dispose*/
+  TCPClient_DataHandler on_data;
+  void* on_data_ctx;
+
 } TCPClient;
 
 
-int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port);
-int TCPClient_InitiatePtr(TCPClient** _ClientPtr, const char* _Host, const char* _Port);
+int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port, TCPClient_DataHandler _OnData, void* _Ctx);
+int TCPClient_InitiatePtr(TCPClient** _ClientPtr, const char* _Host, const char* _Port, TCPClient_DataHandler _OnData, void* _Ctx);
 int TCPClient_Read(TCPClient* _Client);
 int TCPClient_Write(TCPClient* _Client, size_t _Length);
 void TCPClient_Dispose(TCPClient* _Client);
