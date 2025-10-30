@@ -14,14 +14,16 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+/* Callback-type to let user decide how to handle received data without
+  the tcpclient knowing main application logic. */
 typedef void (*TCPClient_DataHandler)(const char* _Data, size_t _Length, void* _Ctx);
 
 typedef struct {
   int fd;
   char* readBuffer; /*Allocated in TCPClient_Read, free'd in dispose*/
   char* writeBuffer; /*Allocated in TCPClient_Read, free'd in dispose*/
-  TCPClient_DataHandler on_data;
-  void* on_data_ctx;
+  TCPClient_DataHandler on_data; /*Callback function*/
+  void* on_data_ctx; /*Contextpointer to allow Callback to carry state if needed*/
 
 } TCPClient;
 
@@ -32,6 +34,5 @@ int TCPClient_Read(TCPClient* _Client);
 int TCPClient_Write(TCPClient* _Client, size_t _Length);
 void TCPClient_Dispose(TCPClient* _Client);
 void TCPClient_DisposePtr(TCPClient** _ClientPtr);
-
 
 #endif /*__TCPCLIENT_H_*/

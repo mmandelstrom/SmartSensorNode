@@ -1,3 +1,13 @@
+# Build dirs
+build/
+
+# Binaries without extensions (top-level)
+client
+server
+
+# Common bins
+bin/
+
 # Prerequisites
 *.d
 

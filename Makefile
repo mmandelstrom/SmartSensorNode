@@ -30,58 +30,44 @@ BUILD_DIR=build
 # Find all .c files (following symlinks)
 SOURCES=$(shell find -L $(SRC_DIR) -type f -name '*.c')
 
-# Per-target object lists in separate dirs
-SERVER_OBJECTS=$(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/server/%.o,$(SOURCES))
+# Per-target object lists in separate dirs (server removed)
 CLIENT_OBJECTS=$(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/client/%.o,$(SOURCES))
 
-# Executables
-EXECUTABLES=server client
+# Executables (server removed)
+EXECUTABLES=client
 
 # Default target
 all: $(EXECUTABLES)
 	@echo "Build complete ($(MODE))."
 
-# Debug helpers
-debug-server:
-	@$(MAKE) MODE=debug --no-print-directory clean server
-	@-rm -f WADEBUG.txt
-	gdb server -ex run
-
+# Debug helpers (server removed)
 debug-client:
 	@$(MAKE) MODE=debug --no-print-directory clean client
 	@-rm -f WADEBUG.txt
 	gdb client -ex run
 
-# Link rules
-server: $(SERVER_OBJECTS)
-	@echo "Linking $@..."
-	@$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
-
+# Link rules (server removed)
 client: $(CLIENT_OBJECTS)
 	@echo "Linking $@..."
 	@$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
 
-# Compile rules with per-target defines
-$(BUILD_DIR)/server/%.o: $(SRC_DIR)/%.c
-	@echo "Compiling (server) $<..."
-	@mkdir -p $(dir $@)
-	@$(CC) $(CFLAGS) $(INCLUDES) -DTCPSERVER -c $< -o $@
-
+# Compile rules with per-target defines (server pattern removed)
 $(BUILD_DIR)/client/%.o: $(SRC_DIR)/%.c
 	@echo "Compiling (client) $<..."
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $(INCLUDES) -DTCPCLIENT -c $< -o $@
 
-# Specific file compilation (kept; builds into server tree by default)
+# Specific file compilation (build into client tree)
 FILE=
 compile:
-	@echo "Compiling $(FILE) (server defs)..."
-	@mkdir -p $(BUILD_DIR)/server/$(dir $(FILE))
-	$(CC) $(CFLAGS) $(INCLUDES) -DTCPSERVER -c $(FILE) -o $(BUILD_DIR)/server/$(FILE:.c=.o)
+	@echo "Compiling $(FILE) (client defs)..."
+	@mkdir -p $(BUILD_DIR)/client/$(dir $(FILE))
+	$(CC) $(CFLAGS) $(INCLUDES) -DTCPCLIENT -c $(FILE) -o $(BUILD_DIR)/client/$(FILE:.c=.o)
 
 # Clean
 clean:
 	@echo "Cleaning up..."
 	@rm -rf $(BUILD_DIR) $(EXECUTABLES)
 
-.PHONY: all clean compile debug-server debug-client
+.PHONY: all clean compile debug-client
+
