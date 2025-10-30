@@ -1,6 +1,5 @@
 #include "TCPClient.h"
-#include <netdb.h>
-#include <netinet/in.h>
+
 
 int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port) {
   _Client->fd = -1;
@@ -42,8 +41,6 @@ int TCPClient_Initiate(TCPClient* _Client, const char* _Host, const char* _Port)
   return 0; 
 }
 
-
-
 int TCPClient_InitiatePtr(TCPClient** _ClientPtr, const char* _Host, const char* _Port) {
   if (!_ClientPtr) {
     return -1;
@@ -63,6 +60,110 @@ int TCPClient_InitiatePtr(TCPClient** _ClientPtr, const char* _Host, const char*
 
   return 0;
 }
+
+int TCPClient_Read(TCPClient* _Client) {
+  if (!_Client) {
+    return -1;
+  }
+
+  if (_Client->fd < 0) {
+    return -2;
+  }
+
+  if (_Client->readBuffer) {
+    free(_Client->readBuffer);
+    _Client->readBuffer = NULL;
+  }
+
+  size_t capacity = 512;
+  _Client->readBuffer = (char*)malloc(capacity + 1);
+  if (!_Client->readBuffer) {
+    perror("malloc");
+    return -3;
+  }
+  ssize_t bytesRead;
+  size_t usedSpace = 0;
+  size_t spaceLeft = capacity;
+
+  while(1) {
+
+    if (usedSpace >= capacity) {
+      size_t newCapacity = capacity * 2;
+      char* tempBuffer = (char*)realloc(_Client->readBuffer, newCapacity + 1);
+      if (!tempBuffer) {
+        free(_Client->readBuffer);
+        _Client->readBuffer = NULL;
+        perror("realloc");
+        return -4;
+      }
+      capacity = newCapacity;
+      _Client->readBuffer = tempBuffer;
+      spaceLeft = capacity - usedSpace;
+    }
+    
+    bytesRead = recv(_Client->fd, _Client->readBuffer + usedSpace, spaceLeft, 0);
+
+    if (bytesRead < 0) {
+      if (errno == EINTR) continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        _Client->readBuffer[usedSpace] = '\0';
+        return (int)usedSpace;
+      }
+      free(_Client->readBuffer);
+      _Client->readBuffer = NULL;
+      perror("recv");
+      return -5;
+    }
+   
+
+    if (bytesRead == 0) {
+      _Client->readBuffer[usedSpace] = '\0';
+      return 0;
+    }
+
+    if (bytesRead > 0) {
+      usedSpace += (size_t)bytesRead;
+      spaceLeft = capacity - usedSpace;
+    }
+  }
+}
+
+
+int TCPClient_Write(TCPClient* _Client, size_t _Length) {
+  if (!_Client || _Client->fd < 0 || !_Client->writeBuffer) {
+    return -1;
+  }
+  
+  size_t bytesLeft = _Length;
+  size_t totalSent = 0;
+  ssize_t bytesSent;
+  char* message = _Client->writeBuffer;
+
+  while (bytesLeft > 0) {
+
+      bytesSent = send(_Client->fd, message, bytesLeft, 0);
+
+      if (bytesSent < 0) {
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          return totalSent;
+        }
+
+        perror("send");
+        return -2; // fatal error
+      }
+
+      if (bytesSent == 0) {
+        return totalSent;
+      }
+
+      totalSent += bytesSent;
+      bytesLeft -= bytesSent;
+      message += bytesSent;
+  }
+    return 0;
+}
+
 void TCPClient_Dispose(TCPClient* _Client) {
   if (_Client == NULL) {
     return;
@@ -71,8 +172,14 @@ void TCPClient_Dispose(TCPClient* _Client) {
     close(_Client->fd);
     _Client->fd = -1;
   }
-
-  memset(_Client, 0, sizeof(TCPClient));
+  if (_Client->readBuffer != NULL) {
+    free(_Client->readBuffer);
+    _Client->readBuffer = NULL;
+  }
+  if (_Client->writeBuffer != NULL) {
+    free(_Client->writeBuffer);
+    _Client->writeBuffer = NULL;
+  }
 }
 
 void TCPClient_DisposePtr(TCPClient** _ClientPtr) {
